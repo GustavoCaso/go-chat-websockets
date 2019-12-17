@@ -53,7 +53,6 @@ func main() {
 
 	go func() {
 		for {
-			fmt.Println("reading msg from socket")
 			_, reader, err := c.Reader(ctx)
 			if err != nil {
 				fmt.Println("Error receiving message: ", err.Error())

@@ -115,16 +115,19 @@ func (c *Chat) broadcast() {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			usersToSend := c.userToSend(message.author)
+			fmt.Println("User to send message: ", usersToSend)
 			bytes, err := message.print()
+			fmt.Println("Message to send: ", bytes)
 			if err == nil {
-				fmt.Println(err)
+				for _, user := range usersToSend {
+					fmt.Println("Broadcasting to: ", user.name)
+					user.conn.Write(ctx, websocket.MessageText, bytes)
+				}
 				c.messagesRead = append(c.messagesRead, message)
-				continue
+			} else {
+				fmt.Println("Error building the message: ", err)
 			}
-			for _, user := range usersToSend {
-				fmt.Println("Broadcasting to: ", user.name)
-				user.conn.Write(ctx, websocket.MessageText, bytes)
-			}
+			fmt.Println("Finish broadcasting")
 		}
 	}
 }
