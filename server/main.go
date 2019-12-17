@@ -15,6 +15,11 @@ import (
 	"nhooyr.io/websocket"
 )
 
+type hub struct {
+	rooms                  map[string]*Chat
+	errorConnectionChannel chan *websocket.Conn
+}
+
 type Message struct {
 	bytes  []byte
 	author User
@@ -44,7 +49,7 @@ type Chat struct {
 	messagesRead []Message
 }
 
-func (c Chat) hasUser(userName string) bool {
+func (c *Chat) hasUser(userName string) bool {
 	for _, user := range c.users {
 		if user.name == userName {
 			return true
@@ -53,7 +58,7 @@ func (c Chat) hasUser(userName string) bool {
 	return false
 }
 
-func (c Chat) addUser(userName string, w http.ResponseWriter, r *http.Request) error {
+func (c *Chat) addUser(userName string, w http.ResponseWriter, r *http.Request) error {
 	conn, err := websocket.Accept(w, r, nil)
 	if err != nil {
 		fmt.Println(err)
@@ -69,7 +74,7 @@ func (c Chat) addUser(userName string, w http.ResponseWriter, r *http.Request) e
 	return nil
 }
 
-func (c Chat) userToSend(author User) []User {
+func (c *Chat) userToSend(author User) []User {
 	result := []User{}
 	for _, user := range c.users {
 		if user != author {
@@ -79,7 +84,7 @@ func (c Chat) userToSend(author User) []User {
 	return result
 }
 
-func (c Chat) listen() {
+func (c *Chat) listen() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	for {
@@ -95,7 +100,7 @@ func (c Chat) listen() {
 	}
 }
 
-func (c Chat) broadcast() {
+func (c *Chat) broadcast() {
 	for {
 		select {
 		case message := <-c.messages:
@@ -115,17 +120,13 @@ func (c Chat) broadcast() {
 	}
 }
 
-func (c Chat) broadcastMessage(message []byte) {
+func (c *Chat) broadcastMessage(message []byte) {
+	fmt.Println("Users in channel: ", len(c.users))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	for _, user := range c.users {
 		user.conn.Write(ctx, websocket.MessageText, message)
 	}
-}
-
-type hub struct {
-	rooms                  map[string]Chat
-	errorConnectionChannel chan *websocket.Conn
 }
 
 var (
@@ -158,7 +159,7 @@ func router(hub *hub) *httprouter.Router {
 
 func newHub() *hub {
 	return &hub{
-		rooms:                  make(map[string]Chat),
+		rooms:                  make(map[string]*Chat),
 		errorConnectionChannel: make(chan *websocket.Conn),
 	}
 }
@@ -185,6 +186,7 @@ func (h *hub) chatRoom(w http.ResponseWriter, r *http.Request, ps httprouter.Par
 			if err != nil {
 				fmt.Println("Error adding user to chat")
 			} else {
+				fmt.Println(userName, " joined")
 				c.broadcastMessage([]byte(fmt.Sprintf("%s joined", userName)))
 			}
 		}
@@ -192,8 +194,8 @@ func (h *hub) chatRoom(w http.ResponseWriter, r *http.Request, ps httprouter.Par
 
 }
 
-func (h *hub) addChat(chat string) Chat {
-	newChat := Chat{
+func (h *hub) addChat(chat string) *Chat {
+	newChat := &Chat{
 		name:  chat,
 		users: []User{},
 	}

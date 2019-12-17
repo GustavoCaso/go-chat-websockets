@@ -43,11 +43,13 @@ func main() {
 	defer c.Close(websocket.StatusInternalError, "the sky is falling")
 
 	go func() {
-		_, reader, err := c.Reader(ctx)
-		if err != nil {
-			fmt.Println("Error receiving message: ", err.Error())
-		} else {
-			io.Copy(os.Stdout, reader)
+		for {
+			_, reader, err := c.Reader(ctx)
+			if err != nil {
+				fmt.Println("Error receiving message: ", err.Error())
+			} else {
+				io.Copy(os.Stdout, reader)
+			}
 		}
 	}()
 
