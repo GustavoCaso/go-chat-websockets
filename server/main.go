@@ -22,7 +22,20 @@ type hub struct {
 
 type Message struct {
 	bytes  []byte
-	author User
+	author *User
+}
+
+type User struct {
+	name      string
+	conn      *websocket.Conn
+	listening bool
+}
+
+type Chat struct {
+	name         string
+	users        []*User
+	messages     chan Message
+	messagesRead []Message
 }
 
 func (m Message) print() ([]byte, error) {
@@ -35,18 +48,6 @@ func (m Message) print() ([]byte, error) {
 		return []byte{}, errors.New("Error creating the message")
 	}
 	return buffer.Bytes(), nil
-}
-
-type User struct {
-	name string
-	conn *websocket.Conn
-}
-
-type Chat struct {
-	name         string
-	users        []User
-	messages     chan Message
-	messagesRead []Message
 }
 
 func (c *Chat) hasUser(userName string) bool {
@@ -64,9 +65,10 @@ func (c *Chat) addUser(userName string, w http.ResponseWriter, r *http.Request) 
 		fmt.Println(err)
 		return err
 	}
-	user := User{
-		name: userName,
-		conn: conn,
+	user := &User{
+		name:      userName,
+		conn:      conn,
+		listening: false,
 	}
 	users := c.users
 	users = append(users, user)
@@ -74,8 +76,8 @@ func (c *Chat) addUser(userName string, w http.ResponseWriter, r *http.Request) 
 	return nil
 }
 
-func (c *Chat) userToSend(author User) []User {
-	result := []User{}
+func (c *Chat) userToSend(author *User) []*User {
+	result := []*User{}
 	for _, user := range c.users {
 		if user != author {
 			result = append(result, user)
@@ -86,22 +88,32 @@ func (c *Chat) userToSend(author User) []User {
 
 func (c *Chat) listen() {
 	fmt.Println("Listeing for messages for chat ", c.name)
+	for {
+		for _, user := range c.users {
+			if !user.listening {
+				user.listening = true
+				go c.listenToUser(user)
+			}
+		}
+	}
+}
+
+func (c *Chat) listenToUser(user *User) {
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	for {
-		for _, user := range c.users {
-			fmt.Println("Listeing for messages for user ", user.name)
-			msgType, msg, err := user.conn.Read(ctx)
-			fmt.Println("Got message with type: ", msgType)
-			if err == nil {
-				fmt.Println("Message recieved: ", msg)
-				c.messages <- Message{
-					bytes:  msg,
-					author: user,
-				}
-			} else {
-				fmt.Println("Error Message recieved: ", err)
+		fmt.Println("Listeing for messages for user ", user.name)
+		msgType, msg, err := user.conn.Read(ctx)
+		fmt.Println("Got message with type: ", msgType)
+		if err == nil {
+			fmt.Println("Message recieved: ", msg)
+			c.messages <- Message{
+				bytes:  msg,
+				author: user,
 			}
+		} else {
+			fmt.Println("Error Message recieved: ", err)
 		}
 	}
 }
@@ -218,7 +230,7 @@ func (h *hub) chatRoom(w http.ResponseWriter, r *http.Request, ps httprouter.Par
 func (h *hub) addChat(chat string) *Chat {
 	newChat := &Chat{
 		name:     chat,
-		users:    []User{},
+		users:    []*User{},
 		messages: make(chan Message, 100),
 	}
 	h.rooms[chat] = newChat
