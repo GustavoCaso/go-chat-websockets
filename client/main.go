@@ -7,7 +7,8 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"time"
+	"os/signal"
+	"syscall"
 
 	"nhooyr.io/websocket"
 )
@@ -31,8 +32,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go func() {
+		sigChan := make(chan os.Signal)
+		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+		<-sigChan
+		fmt.Println("Shutting Down!!!")
+		cancel()
+	}()
+
 	url := fmt.Sprintf("ws://localhost:%d/chat/%s/%s", port, user, chatRoom)
 	c, _, err := websocket.Dial(ctx, url, nil)
 	if err != nil {
@@ -44,9 +53,11 @@ func main() {
 
 	go func() {
 		for {
+			fmt.Println("reading msg from socket")
 			_, reader, err := c.Reader(ctx)
 			if err != nil {
 				fmt.Println("Error receiving message: ", err.Error())
+				break
 			} else {
 				io.Copy(os.Stdout, reader)
 			}
@@ -60,6 +71,8 @@ func main() {
 		if text == "" {
 			continue
 		}
+
+		fmt.Println("Sending: ", text)
 
 		err = c.Write(ctx, websocket.MessageText, []byte(text))
 		if err != nil {

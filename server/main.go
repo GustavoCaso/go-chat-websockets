@@ -85,35 +85,44 @@ func (c *Chat) userToSend(author User) []User {
 }
 
 func (c *Chat) listen() {
+	fmt.Println("Listeing for messages for chat ", c.name)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	for {
 		for _, user := range c.users {
-			_, msg, err := user.conn.Read(ctx)
-			if err != nil {
+			fmt.Println("Listeing for messages for user ", user.name)
+			msgType, msg, err := user.conn.Read(ctx)
+			fmt.Println("Got message with type: ", msgType)
+			if err == nil {
+				fmt.Println("Message recieved: ", msg)
 				c.messages <- Message{
 					bytes:  msg,
 					author: user,
 				}
+			} else {
+				fmt.Println("Error Message recieved: ", err)
 			}
 		}
 	}
 }
 
 func (c *Chat) broadcast() {
+	fmt.Println("Broadcasting messages")
 	for {
 		select {
 		case message := <-c.messages:
+			fmt.Println("Broadcasting message: ", message)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			usersToSend := c.userToSend(message.author)
 			bytes, err := message.print()
-			if err != nil {
+			if err == nil {
 				fmt.Println(err)
 				c.messagesRead = append(c.messagesRead, message)
 				continue
 			}
 			for _, user := range usersToSend {
+				fmt.Println("Broadcasting to: ", user.name)
 				user.conn.Write(ctx, websocket.MessageText, bytes)
 			}
 		}
@@ -139,6 +148,14 @@ func init() {
 
 func main() {
 	flag.Parse()
+
+	// go func() {
+	// 	sigChan := make(chan os.Signal)
+	// 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	// 	<-sigChan
+	// 	fmt.Println("Shutting Down!!!")
+	// 	cancel()
+	// }()
 
 	logger := log.New(os.Stdout, "[HTTP] ", log.LstdFlags)
 	hub := newHub()
@@ -173,8 +190,8 @@ func (h *hub) chatRoom(w http.ResponseWriter, r *http.Request, ps httprouter.Par
 		err := c.addUser(userName, w, r)
 		if err != nil {
 			fmt.Println("Error adding user to chat")
+			panic("Error adding the user")
 		}
-		fmt.Println("Broadcasting message to: ", c)
 		c.broadcastMessage([]byte(fmt.Sprintf("%s joined", userName)))
 		go c.listen()
 		go c.broadcast()
@@ -185,6 +202,7 @@ func (h *hub) chatRoom(w http.ResponseWriter, r *http.Request, ps httprouter.Par
 			err := c.addUser(userName, w, r)
 			if err != nil {
 				fmt.Println("Error adding user to chat")
+				panic("Error adding the user")
 			} else {
 				fmt.Println(userName, " joined")
 				c.broadcastMessage([]byte(fmt.Sprintf("%s joined", userName)))
@@ -196,8 +214,9 @@ func (h *hub) chatRoom(w http.ResponseWriter, r *http.Request, ps httprouter.Par
 
 func (h *hub) addChat(chat string) *Chat {
 	newChat := &Chat{
-		name:  chat,
-		users: []User{},
+		name:     chat,
+		users:    []User{},
+		messages: make(chan Message, 100),
 	}
 	h.rooms[chat] = newChat
 	return newChat
