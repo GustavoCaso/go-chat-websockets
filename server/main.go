@@ -47,8 +47,28 @@ func main() {
 	hub := newHub(ctx, &wg)
 	serverAddr := fmt.Sprintf(":%d", port)
 	httpServer := httpServer(serverAddr, router(hub), logger)
+	go gracefullShutdown(ctx, httpServer)
 	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		logger.Fatalf("Could not listen on %s: %v\n", serverAddr, err)
+	}
+}
+
+func gracefullShutdown(ctx context.Context, server *http.Server) {
+	for {
+		select {
+		case <-ctx.Done():
+			fmt.Println("Server is shutting down...")
+
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			server.SetKeepAlivesEnabled(false)
+			if err := server.Shutdown(ctx); err != nil {
+				fmt.Println("Could not gracefully shutdown the server")
+			}
+			fmt.Println("Server shut down!")
+			break
+		}
 	}
 }
 
