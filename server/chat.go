@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"nhooyr.io/websocket"
 )
@@ -14,6 +15,7 @@ type chat struct {
 	messagesRead []message
 	dropUsers    chan *user
 	ctx          context.Context
+	wg           *sync.WaitGroup
 }
 
 func (c *chat) hasUser(userName string) bool {
@@ -49,6 +51,12 @@ func (c *chat) userToSend(author *user) []*user {
 		}
 	}
 	return result
+}
+
+func (c *chat) run() {
+	go c.listen()
+	go c.broadcast()
+	go c.cleanup()
 }
 
 func (c *chat) listen() {

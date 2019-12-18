@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -17,10 +18,12 @@ import (
 type hub struct {
 	rooms map[string]*chat
 	ctx   context.Context
+	wg    *sync.WaitGroup
 }
 
 var (
 	port uint
+	wg   sync.WaitGroup
 )
 
 func init() {
@@ -41,7 +44,7 @@ func main() {
 	}()
 
 	logger := log.New(os.Stdout, "[HTTP] ", log.LstdFlags)
-	hub := newHub(ctx)
+	hub := newHub(ctx, &wg)
 	serverAddr := fmt.Sprintf(":%d", port)
 	httpServer := httpServer(serverAddr, router(hub), logger)
 	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -57,10 +60,11 @@ func router(hub *hub) *httprouter.Router {
 	return router
 }
 
-func newHub(ctx context.Context) *hub {
+func newHub(ctx context.Context, wg *sync.WaitGroup) *hub {
 	return &hub{
 		rooms: make(map[string]*chat),
 		ctx:   ctx,
+		wg:    wg,
 	}
 }
 
@@ -77,9 +81,7 @@ func (h *hub) chatRoom(w http.ResponseWriter, r *http.Request, ps httprouter.Par
 		}
 		c.addUser(user)
 		c.broadcastMessage([]byte(fmt.Sprintf("%s joined", userName)))
-		go c.listen()
-		go c.broadcast()
-		go c.cleanup()
+		c.run()
 	} else {
 		if c.hasUser(userName) {
 			fmt.Println("Chat: ", chatRoom, " and user name: ", userName, " already exists")
@@ -104,6 +106,7 @@ func (h *hub) addChat(chatName string) *chat {
 		messages:  make(chan message, 100),
 		dropUsers: make(chan *user, 100),
 		ctx:       h.ctx,
+		wg:        h.wg,
 	}
 	h.rooms[chatName] = newChat
 	return newChat
