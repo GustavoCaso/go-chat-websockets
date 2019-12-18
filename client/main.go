@@ -59,6 +59,7 @@ func main() {
 				break
 			} else {
 				io.Copy(os.Stdout, reader)
+				fmt.Println("")
 			}
 		}
 	}()
@@ -70,8 +71,6 @@ func main() {
 		if text == "" {
 			continue
 		}
-
-		fmt.Println("Sending: ", text)
 
 		err = c.Write(ctx, websocket.MessageText, []byte(text))
 		if err != nil {

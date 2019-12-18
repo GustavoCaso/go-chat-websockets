@@ -16,8 +16,7 @@ import (
 )
 
 type hub struct {
-	rooms                  map[string]*Chat
-	errorConnectionChannel chan *websocket.Conn
+	rooms map[string]*Chat
 }
 
 type Message struct {
@@ -36,6 +35,7 @@ type Chat struct {
 	users        []*User
 	messages     chan Message
 	messagesRead []Message
+	dropUsers    chan *User
 }
 
 func (m Message) print() ([]byte, error) {
@@ -76,6 +76,16 @@ func (c *Chat) addUser(userName string, w http.ResponseWriter, r *http.Request) 
 	return nil
 }
 
+func (c *Chat) deleteUser(userToDelete *User) []*User {
+	var result []*User
+	for _, user := range c.users {
+		if user != userToDelete {
+			result = append(result, user)
+		}
+	}
+	return result
+}
+
 func (c *Chat) userToSend(author *User) []*User {
 	result := []*User{}
 	for _, user := range c.users {
@@ -99,7 +109,6 @@ func (c *Chat) listen() {
 }
 
 func (c *Chat) listenToUser(user *User) {
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	for {
@@ -114,6 +123,8 @@ func (c *Chat) listenToUser(user *User) {
 			}
 		} else {
 			fmt.Println("Error Message recieved: ", err)
+			c.dropUsers <- user
+			break
 		}
 	}
 }
@@ -140,6 +151,18 @@ func (c *Chat) broadcast() {
 				fmt.Println("Error building the message: ", err)
 			}
 			fmt.Println("Finish broadcasting")
+		}
+	}
+}
+
+func (c *Chat) cleanup() {
+	fmt.Println("Cleaning dropped users")
+	for {
+		select {
+		case user := <-c.dropUsers:
+			fmt.Println("Removing user: ", user.name)
+			users := c.deleteUser(user)
+			c.users = users
 		}
 	}
 }
@@ -191,8 +214,7 @@ func router(hub *hub) *httprouter.Router {
 
 func newHub() *hub {
 	return &hub{
-		rooms:                  make(map[string]*Chat),
-		errorConnectionChannel: make(chan *websocket.Conn),
+		rooms: make(map[string]*Chat),
 	}
 }
 
@@ -210,6 +232,7 @@ func (h *hub) chatRoom(w http.ResponseWriter, r *http.Request, ps httprouter.Par
 		c.broadcastMessage([]byte(fmt.Sprintf("%s joined", userName)))
 		go c.listen()
 		go c.broadcast()
+		go c.cleanup()
 	} else {
 		if c.hasUser(userName) {
 			fmt.Println("Chat: ", chatRoom, " and user name: ", userName, " already exists")
@@ -229,9 +252,10 @@ func (h *hub) chatRoom(w http.ResponseWriter, r *http.Request, ps httprouter.Par
 
 func (h *hub) addChat(chat string) *Chat {
 	newChat := &Chat{
-		name:     chat,
-		users:    []*User{},
-		messages: make(chan Message, 100),
+		name:      chat,
+		users:     []*User{},
+		messages:  make(chan Message, 100),
+		dropUsers: make(chan *User, 100),
 	}
 	h.rooms[chat] = newChat
 	return newChat
