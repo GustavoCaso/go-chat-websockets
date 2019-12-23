@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"nhooyr.io/websocket"
@@ -64,19 +65,34 @@ func main() {
 		}
 	}()
 
-	// send
-	scanner := bufio.NewScanner(os.Stdin)
-	for scanner.Scan() {
-		text := scanner.Text()
-		if text == "" {
-			continue
-		}
+	input := make(chan string, 1)
+	go getInput(input)
 
-		err = c.Write(ctx, websocket.MessageText, []byte(text))
-		if err != nil {
-			log.WithError(err).Warn("Error sending message")
-			break
+Loop:
+	for {
+		select {
+		case text := <-input:
+			err = c.Write(ctx, websocket.MessageText, []byte(text))
+			if err != nil {
+				log.WithError(err).Fatal("Error sending message")
+				break
+			}
+		case <-ctx.Done():
+			log.Fatal("Client session ended")
+		case <-time.After(4000 * time.Millisecond):
+			continue Loop
 		}
 	}
+}
 
+func getInput(input chan string) {
+	for {
+		in := bufio.NewReader(os.Stdin)
+		result, err := in.ReadString('\n')
+		if err != nil {
+			log.WithError(err).Fatal(err)
+		}
+
+		input <- result
+	}
 }
