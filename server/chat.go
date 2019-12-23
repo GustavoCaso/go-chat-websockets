@@ -2,9 +2,9 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
+	log "github.com/sirupsen/logrus"
 	"nhooyr.io/websocket"
 )
 
@@ -60,7 +60,9 @@ func (c *chat) run() {
 }
 
 func (c *chat) listen() {
-	fmt.Println("Listeing for messages for chat ", c.name)
+	log.WithFields(log.Fields{
+		"chat": c.name,
+	}).Info("Listeing for messages")
 	for {
 		for _, user := range c.users {
 			if !user.listening {
@@ -73,17 +75,22 @@ func (c *chat) listen() {
 
 func (c *chat) listenToUser(user *user) {
 	for {
-		fmt.Println("Listeing for messages for user ", user.name)
-		msgType, msg, err := user.conn.Read(c.ctx)
-		fmt.Println("Got message with type: ", msgType)
+		log.WithFields(log.Fields{
+			"username": user.name,
+		}).Info("Listeing to incomming messages")
+		_, msg, err := user.conn.Read(c.ctx)
 		if err == nil {
-			fmt.Println("Message recieved: ", msg)
+			log.WithFields(log.Fields{
+				"username": user.name,
+			}).Info("Message received")
 			c.messages <- message{
 				bytes:  msg,
 				author: user,
 			}
 		} else {
-			fmt.Println("Error Message recieved: ", err)
+			log.WithError(err).WithFields(log.Fields{
+				"username": user.name,
+			}).Warn("Error receiving message")
 			c.dropUsers <- user
 			break
 		}
@@ -91,35 +98,33 @@ func (c *chat) listenToUser(user *user) {
 }
 
 func (c *chat) broadcast() {
-	fmt.Println("Broadcasting messages")
+	log.Info("Broadcasting messages")
 	for {
 		select {
 		case message := <-c.messages:
-			fmt.Println("Broadcasting message: ", message)
+			log.WithField("from", message.author.name).Info("Received Message")
 			usersToSend := c.userToSend(message.author)
-			fmt.Println("User to send message: ", usersToSend)
+			log.WithField("to", usersToSend).Info("Broadcasting message")
 			bytes, err := message.print()
-			fmt.Println("Message to send: ", bytes)
 			if err == nil {
 				for _, user := range usersToSend {
-					fmt.Println("Broadcasting to: ", user.name)
 					user.conn.Write(c.ctx, websocket.MessageText, bytes)
 				}
 				c.messagesRead = append(c.messagesRead, message)
 			} else {
-				fmt.Println("Error building the message: ", err)
+				log.WithError(err).Warn("Error building the message")
 			}
-			fmt.Println("Finish broadcasting")
+			log.Infoln("Finish broadcasting")
 		}
 	}
 }
 
 func (c *chat) cleanup() {
-	fmt.Println("Cleaning dropped users")
+	log.Infoln("Cleaning dropped users")
 	for {
 		select {
 		case user := <-c.dropUsers:
-			fmt.Println("Removing user: ", user.name)
+			log.WithField("username", user.name).Info("Removing user")
 			users := c.deleteUser(user)
 			c.users = users
 		}
@@ -127,7 +132,6 @@ func (c *chat) cleanup() {
 }
 
 func (c *chat) broadcastMessage(message []byte) {
-	fmt.Println("Users in channel: ", len(c.users))
 	for _, user := range c.users {
 		user.conn.Write(c.ctx, websocket.MessageText, message)
 	}

@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	log "github.com/sirupsen/logrus"
 	"nhooyr.io/websocket"
 )
 
@@ -29,7 +30,7 @@ func main() {
 	flag.Parse()
 
 	if user == "" {
-		os.Exit(1)
+		log.Fatal("Please provide an username you want to log in")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -38,24 +39,23 @@ func main() {
 		sigChan := make(chan os.Signal)
 		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 		<-sigChan
-		fmt.Println("Shutting Down!!!")
+		log.Info("Shutting Down!!!")
 		cancel()
 	}()
 
 	url := fmt.Sprintf("ws://localhost:%d/chat/%s/%s", port, user, chatRoom)
 	c, _, err := websocket.Dial(ctx, url, nil)
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		log.WithError(err).Fatal("Error opening a connection to server")
 	}
-	fmt.Println("Connected")
+	log.Info("Connected")
 	defer c.Close(websocket.StatusInternalError, "the sky is falling")
 
 	go func() {
 		for {
 			_, reader, err := c.Reader(ctx)
 			if err != nil {
-				fmt.Println("Error receiving message: ", err.Error())
+				log.WithError(err).Warn("Error receiving message")
 				break
 			} else {
 				io.Copy(os.Stdout, reader)
@@ -74,7 +74,7 @@ func main() {
 
 		err = c.Write(ctx, websocket.MessageText, []byte(text))
 		if err != nil {
-			fmt.Println("Error sending message: ", err.Error())
+			log.WithError(err).Warn("Error sending message")
 			break
 		}
 	}

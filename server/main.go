@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"github.com/julienschmidt/httprouter"
+	log "github.com/sirupsen/logrus"
 )
 
 type hub struct {
@@ -39,17 +39,16 @@ func main() {
 		sigChan := make(chan os.Signal)
 		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 		<-sigChan
-		fmt.Println("Shutting Down!!!")
+		log.Info("Shutting Down!!!")
 		cancel()
 	}()
 
-	logger := log.New(os.Stdout, "[HTTP] ", log.LstdFlags)
 	hub := newHub(ctx, &wg)
 	serverAddr := fmt.Sprintf(":%d", port)
-	httpServer := httpServer(serverAddr, router(hub), logger)
+	httpServer := httpServer(serverAddr, router(hub))
 	go gracefullShutdown(ctx, httpServer)
 	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		logger.Fatalf("Could not listen on %s: %v\n", serverAddr, err)
+		log.WithError(err).Fatalf("Could not listen on %s", serverAddr)
 	}
 }
 
@@ -57,16 +56,16 @@ func gracefullShutdown(ctx context.Context, server *http.Server) {
 	for {
 		select {
 		case <-ctx.Done():
-			fmt.Println("Server is shutting down...")
+			log.Info("Server is shutting down...")
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
 			server.SetKeepAlivesEnabled(false)
 			if err := server.Shutdown(ctx); err != nil {
-				fmt.Println("Could not gracefully shutdown the server")
+				log.WithError(err).Warn("Could not gracefully shutdown the server")
 			}
-			fmt.Println("Server shut down!")
+			log.Info("Server shut down!")
 			break
 		}
 	}
@@ -96,23 +95,27 @@ func (h *hub) chatRoom(w http.ResponseWriter, r *http.Request, ps httprouter.Par
 		c := h.addChat(chatRoom)
 		user, err := newUser(userName, w, r)
 		if err != nil {
-			fmt.Println("Error adding user to chat")
-			panic("Error creating the user")
+			log.WithError(err).Fatal("Error creating user to new chat")
 		}
 		c.addUser(user)
 		c.broadcastMessage([]byte(fmt.Sprintf("%s joined", userName)))
 		c.run()
 	} else {
 		if c.hasUser(userName) {
-			fmt.Println("Chat: ", chatRoom, " and user name: ", userName, " already exists")
+			log.WithFields(log.Fields{
+				"chat":     chatRoom,
+				"username": userName,
+			}).Info("User already exists in chat room")
 		} else {
 			user, err := newUser(userName, w, r)
 			if err != nil {
-				fmt.Println("Error adding user to chat")
-				panic("Error creating the user")
+				log.WithError(err).Fatal("Error creating user for chat")
 			} else {
 				c.addUser(user)
-				fmt.Println(userName, " joined")
+				log.WithFields(log.Fields{
+					"chat":     chatRoom,
+					"username": userName,
+				}).Info("User joined")
 				c.broadcastMessage([]byte(fmt.Sprintf("%s joined", userName)))
 			}
 		}
@@ -132,11 +135,10 @@ func (h *hub) addChat(chatName string) *chat {
 	return newChat
 }
 
-func httpServer(addr string, router *httprouter.Router, logger *log.Logger) *http.Server {
+func httpServer(addr string, router *httprouter.Router) *http.Server {
 	return &http.Server{
 		Addr:         addr,
 		Handler:      router,
-		ErrorLog:     logger,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  15 * time.Second,

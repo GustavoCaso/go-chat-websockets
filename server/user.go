@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 
+	log "github.com/sirupsen/logrus"
 	"nhooyr.io/websocket"
 )
 
@@ -16,7 +16,7 @@ type user struct {
 func newUser(userName string, w http.ResponseWriter, r *http.Request) (*user, error) {
 	conn, err := websocket.Accept(w, r, nil)
 	if err != nil {
-		fmt.Println(err)
+		log.WithError(err).WithField("username", userName).Warn("Error open connection for user")
 		return &user{}, err
 	}
 	user := &user{
