@@ -21,7 +21,7 @@ var (
 )
 
 func init() {
-	flag.UintVar(&port, "port", 8080, "Port to start the health server")
+	flag.UintVar(&port, "port", 8080, "Port to start the chat server")
 }
 
 func main() {
