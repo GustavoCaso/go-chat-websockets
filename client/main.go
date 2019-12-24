@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	log "github.com/sirupsen/logrus"
 	"nhooyr.io/websocket"
@@ -54,7 +53,7 @@ func (c *client) getInput() {
 func (c *client) run() {
 	go c.listen()
 	go c.getInput()
-Loop:
+loop:
 	for {
 		select {
 		case text := <-c.message:
@@ -64,9 +63,8 @@ Loop:
 				break
 			}
 		case <-c.ctx.Done():
-			log.Fatal("Client session ended")
-		case <-time.After(4000 * time.Millisecond):
-			continue Loop
+			log.Info("Client session ended")
+			break loop
 		}
 	}
 }
