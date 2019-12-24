@@ -53,6 +53,7 @@ func main() {
 }
 
 func gracefullShutdown(ctx context.Context, server *http.Server) {
+loop:
 	for {
 		select {
 		case <-ctx.Done():
@@ -66,7 +67,7 @@ func gracefullShutdown(ctx context.Context, server *http.Server) {
 				log.WithError(err).Warn("Could not gracefully shutdown the server")
 			}
 			log.Info("Server shut down!")
-			break
+			break loop
 		}
 	}
 }
@@ -98,7 +99,6 @@ func (h *hub) chatRoom(w http.ResponseWriter, r *http.Request, ps httprouter.Par
 			log.WithError(err).Fatal("Error creating user to new chat")
 		}
 		c.addUser(user)
-		c.broadcastMessage([]byte(fmt.Sprintf("%s joined", userName)))
 		c.run()
 	} else {
 		if c.hasUser(userName) {
@@ -116,7 +116,6 @@ func (h *hub) chatRoom(w http.ResponseWriter, r *http.Request, ps httprouter.Par
 					"chat":     chatRoom,
 					"username": userName,
 				}).Info("User joined")
-				c.broadcastMessage([]byte(fmt.Sprintf("%s joined", userName)))
 			}
 		}
 	}
@@ -124,12 +123,13 @@ func (h *hub) chatRoom(w http.ResponseWriter, r *http.Request, ps httprouter.Par
 
 func (h *hub) addChat(chatName string) *chat {
 	newChat := &chat{
-		name:      chatName,
-		users:     []*user{},
-		messages:  make(chan message, 100),
-		dropUsers: make(chan *user, 100),
-		ctx:       h.ctx,
-		wg:        h.wg,
+		name:       chatName,
+		users:      []*user{},
+		messages:   make(chan message, 100),
+		dropUsers:  make(chan *user, 100),
+		addedUsers: make(chan *user, 100),
+		ctx:        h.ctx,
+		wg:         h.wg,
 	}
 	h.rooms[chatName] = newChat
 	return newChat

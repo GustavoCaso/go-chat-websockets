@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
@@ -13,6 +14,7 @@ type chat struct {
 	users        []*user
 	messages     chan message
 	messagesRead []message
+	addedUsers   chan *user
 	dropUsers    chan *user
 	ctx          context.Context
 	wg           *sync.WaitGroup
@@ -28,9 +30,7 @@ func (c *chat) hasUser(userName string) bool {
 }
 
 func (c *chat) addUser(user *user) {
-	users := c.users
-	users = append(users, user)
-	c.users = users
+	c.addedUsers <- user
 }
 
 func (c *chat) deleteUser(userToDelete *user) []*user {
@@ -64,10 +64,12 @@ func (c *chat) listen() {
 		"chat": c.name,
 	}).Info("Listeing for messages")
 	for {
-		for _, user := range c.users {
-			if !user.listening {
-				user.listening = true
-				go c.listenToUser(user)
+		if len(c.users) > 0 {
+			for _, user := range c.users {
+				if !user.listening {
+					user.listening = true
+					go c.listenToUser(user)
+				}
 			}
 		}
 	}
@@ -123,6 +125,12 @@ func (c *chat) cleanup() {
 	log.Infoln("Cleaning dropped users")
 	for {
 		select {
+		case user := <-c.addedUsers:
+			log.WithField("username", user.name).Info("Adding user")
+			users := c.users
+			users = append(users, user)
+			c.users = users
+			c.broadcastMessage([]byte(fmt.Sprintf("%s joined %s", user.name, c.name)))
 		case user := <-c.dropUsers:
 			log.WithField("username", user.name).Info("Removing user")
 			users := c.deleteUser(user)

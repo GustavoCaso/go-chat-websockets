@@ -22,7 +22,7 @@ type client struct {
 }
 
 func (c *client) close() {
-	defer c.conn.Close(websocket.StatusInternalError, "the sky is falling")
+	defer c.conn.Close(websocket.StatusInternalError, "Client closed connection")
 }
 
 func (c *client) listen() {
