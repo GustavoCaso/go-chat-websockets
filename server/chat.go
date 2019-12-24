@@ -20,39 +20,6 @@ type chat struct {
 	wg           *sync.WaitGroup
 }
 
-func (c *chat) hasUser(userName string) bool {
-	for _, user := range c.users {
-		if user.name == userName {
-			return true
-		}
-	}
-	return false
-}
-
-func (c *chat) addUser(user *user) {
-	c.addedUsers <- user
-}
-
-func (c *chat) deleteUser(userToDelete *user) []*user {
-	var result []*user
-	for _, user := range c.users {
-		if user != userToDelete {
-			result = append(result, user)
-		}
-	}
-	return result
-}
-
-func (c *chat) userToSend(author *user) []*user {
-	result := []*user{}
-	for _, user := range c.users {
-		if user != author {
-			result = append(result, user)
-		}
-	}
-	return result
-}
-
 func (c *chat) run() {
 	go c.listen()
 	go c.broadcast()
@@ -155,4 +122,37 @@ func (c *chat) broadcastMessage(message []byte) {
 	for _, user := range c.users {
 		user.conn.Write(c.ctx, websocket.MessageText, message)
 	}
+}
+
+func (c *chat) hasUser(userName string) bool {
+	for _, user := range c.users {
+		if user.name == userName {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *chat) addUser(user *user) {
+	c.addedUsers <- user
+}
+
+func (c *chat) deleteUser(userToDelete *user) []*user {
+	var result []*user
+	for _, user := range c.users {
+		if user != userToDelete {
+			result = append(result, user)
+		}
+	}
+	return result
+}
+
+func (c *chat) userToSend(author *user) []*user {
+	result := []*user{}
+	for _, user := range c.users {
+		if user != author {
+			result = append(result, user)
+		}
+	}
+	return result
 }

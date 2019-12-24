@@ -15,12 +15,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type hub struct {
-	rooms map[string]*chat
-	ctx   context.Context
-	wg    *sync.WaitGroup
-}
-
 var (
 	port uint
 	wg   sync.WaitGroup
@@ -84,14 +78,6 @@ func router(hub *hub) *httprouter.Router {
 	return router
 }
 
-func newHub(ctx context.Context, wg *sync.WaitGroup) *hub {
-	return &hub{
-		rooms: make(map[string]*chat),
-		ctx:   ctx,
-		wg:    wg,
-	}
-}
-
 func (h *hub) chatRoom(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	chatRoom := ps.ByName("chat_room")
 	userName := ps.ByName("user_name")
@@ -123,20 +109,6 @@ func (h *hub) chatRoom(w http.ResponseWriter, r *http.Request, ps httprouter.Par
 			}
 		}
 	}
-}
-
-func (h *hub) addChat(chatName string) *chat {
-	newChat := &chat{
-		name:       chatName,
-		users:      []*user{},
-		messages:   make(chan message, 100),
-		dropUsers:  make(chan *user, 100),
-		addedUsers: make(chan *user, 100),
-		ctx:        h.ctx,
-		wg:         h.wg,
-	}
-	h.rooms[chatName] = newChat
-	return newChat
 }
 
 func httpServer(addr string, router *httprouter.Router) *http.Server {
