@@ -46,13 +46,16 @@ func main() {
 	hub := newHub(ctx, &wg)
 	serverAddr := fmt.Sprintf(":%d", port)
 	httpServer := httpServer(serverAddr, router(hub))
-	go gracefullShutdown(ctx, httpServer)
+	go gracefullShutdown(ctx, httpServer, &wg)
 	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.WithError(err).Fatalf("Could not listen on %s", serverAddr)
 	}
+
+	wg.Wait()
 }
 
-func gracefullShutdown(ctx context.Context, server *http.Server) {
+func gracefullShutdown(ctx context.Context, server *http.Server, wg *sync.WaitGroup) {
+	wg.Add(1)
 loop:
 	for {
 		select {
@@ -70,6 +73,7 @@ loop:
 			break loop
 		}
 	}
+	wg.Done()
 }
 
 func router(hub *hub) *httprouter.Router {

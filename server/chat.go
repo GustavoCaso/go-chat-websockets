@@ -57,6 +57,7 @@ func (c *chat) run() {
 	go c.listen()
 	go c.broadcast()
 	go c.cleanup()
+
 }
 
 func (c *chat) listen() {
@@ -76,6 +77,7 @@ func (c *chat) listen() {
 }
 
 func (c *chat) listenToUser(user *user) {
+	c.wg.Add(1)
 	for {
 		log.WithFields(log.Fields{
 			"username": user.name,
@@ -97,10 +99,13 @@ func (c *chat) listenToUser(user *user) {
 			break
 		}
 	}
+	wg.Done()
 }
 
 func (c *chat) broadcast() {
+	c.wg.Add(1)
 	log.Info("Broadcasting messages")
+loop:
 	for {
 		select {
 		case message := <-c.messages:
@@ -116,13 +121,17 @@ func (c *chat) broadcast() {
 			} else {
 				log.WithError(err).Warn("Error building the message")
 			}
-			log.Infoln("Finish broadcasting")
+		case <-c.ctx.Done():
+			break loop
 		}
 	}
+	c.wg.Done()
 }
 
 func (c *chat) cleanup() {
+	c.wg.Add(1)
 	log.Infoln("Cleaning dropped users")
+loop:
 	for {
 		select {
 		case user := <-c.addedUsers:
@@ -135,8 +144,11 @@ func (c *chat) cleanup() {
 			log.WithField("username", user.name).Info("Removing user")
 			users := c.deleteUser(user)
 			c.users = users
+		case <-c.ctx.Done():
+			break loop
 		}
 	}
+	c.wg.Done()
 }
 
 func (c *chat) broadcastMessage(message []byte) {
