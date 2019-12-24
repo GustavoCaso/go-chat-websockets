@@ -67,6 +67,7 @@ loop:
 			break loop
 		}
 	}
+	c.close()
 }
 
 func newClient(ctx context.Context, userName, addr string) *client {
