@@ -33,7 +33,6 @@ func (c *client) listen() {
 			break
 		} else {
 			io.Copy(os.Stdout, reader)
-			fmt.Println("")
 		}
 	}
 }

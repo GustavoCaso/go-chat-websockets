@@ -106,7 +106,7 @@ loop:
 			users := c.users
 			users = append(users, user)
 			c.users = users
-			c.broadcastMessage([]byte(fmt.Sprintf("%s joined %s", user.name, c.name)))
+			c.broadcastMessage([]byte(fmt.Sprintf("%s joined %s\n", user.name, c.name)))
 		case user := <-c.dropUsers:
 			log.WithField("username", user.name).Info("Removing user")
 			users := c.deleteUser(user)
