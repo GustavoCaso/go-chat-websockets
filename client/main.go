@@ -112,7 +112,7 @@ func main() {
 		cancel()
 	}()
 
-	url := fmt.Sprintf("ws://localhost:%d/chat/%s/%s", port, user, chatRoom)
+	url := fmt.Sprintf("ws://localhost:%d/chat/%s/%s", port, chatRoom, user)
 	client := newClient(ctx, user, url)
 
 	client.run()

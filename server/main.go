@@ -73,7 +73,7 @@ loop:
 func router(hub *hub) *httprouter.Router {
 	router := httprouter.New()
 
-	router.GET("/chat/:user_name/:chat_room", hub.chatRoom)
+	router.GET("/chat/:chat_room/:user_name", hub.chatRoom)
 
 	return router
 }

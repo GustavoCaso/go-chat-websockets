@@ -61,7 +61,7 @@ func (c *chat) listenToUser(user *user) {
 		} else {
 			log.WithError(err).WithFields(log.Fields{
 				"username": user.name,
-			}).Warn("Error receiving message")
+			}).Warn("Error while listening to user messages")
 			c.dropUsers <- user
 			break
 		}
