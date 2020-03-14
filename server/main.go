@@ -78,39 +78,6 @@ func router(hub *hub) *httprouter.Router {
 	return router
 }
 
-func (h *hub) chatRoom(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-	chatRoom := ps.ByName("chat_room")
-	userName := ps.ByName("user_name")
-	c, ok := h.rooms[chatRoom]
-	if !ok {
-		c := h.addChat(chatRoom)
-		user, err := newUser(userName, w, r)
-		if err != nil {
-			log.WithError(err).Fatal("Error creating user to new chat")
-		}
-		c.addUser(user)
-		c.run()
-	} else {
-		if c.hasUser(userName) {
-			log.WithFields(log.Fields{
-				"chat":     chatRoom,
-				"username": userName,
-			}).Info("User already exists in chat room")
-		} else {
-			user, err := newUser(userName, w, r)
-			if err != nil {
-				log.WithError(err).Fatal("Error creating user for chat")
-			} else {
-				c.addUser(user)
-				log.WithFields(log.Fields{
-					"chat":     chatRoom,
-					"username": userName,
-				}).Info("User joined")
-			}
-		}
-	}
-}
-
 func httpServer(addr string, router *httprouter.Router) *http.Server {
 	return &http.Server{
 		Addr:         addr,

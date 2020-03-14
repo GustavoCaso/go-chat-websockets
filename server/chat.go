@@ -23,8 +23,7 @@ type chat struct {
 func (c *chat) run() {
 	go c.listen()
 	go c.broadcast()
-	go c.cleanup()
-
+	go c.keepUserListUpdated()
 }
 
 func (c *chat) listen() {
@@ -95,9 +94,9 @@ loop:
 	c.wg.Done()
 }
 
-func (c *chat) cleanup() {
+func (c *chat) keepUserListUpdated() {
 	c.wg.Add(1)
-	log.Infoln("Cleaning dropped users")
+	log.Infoln("Keep users updated")
 loop:
 	for {
 		select {

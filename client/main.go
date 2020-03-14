@@ -23,6 +23,7 @@ type client struct {
 
 func (c *client) close() {
 	defer c.conn.Close(websocket.StatusInternalError, "Client closed connection")
+	defer close(c.message)
 }
 
 func (c *client) listen() {
@@ -45,7 +46,9 @@ func (c *client) getInput() {
 			log.WithError(err).Fatal(err)
 		}
 
-		c.message <- result
+		if result != "" {
+			c.message <- result
+		}
 	}
 }
 
@@ -59,7 +62,7 @@ loop:
 			err := c.conn.Write(c.ctx, websocket.MessageText, []byte(text))
 			if err != nil {
 				log.WithError(err).Fatal("Error sending message")
-				break
+				break loop
 			}
 		case <-c.ctx.Done():
 			log.Info("Client session ended")
